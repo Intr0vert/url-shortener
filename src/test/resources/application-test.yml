@@ -1,0 +1,15 @@
+spring:
+  datasource:
+    url: jdbc:tc:postgresql:16:///shortener
+    username: shortener
+    password: shortener
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: true
+  flyway:
+    enabled: true
+
+jwt:
+  secret: test-secret-key-that-is-at-least-32-characters-long
+  expiration-ms: 86400000

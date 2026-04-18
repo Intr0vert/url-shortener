@@ -6,6 +6,7 @@ import org.hibernate.validator.constraints.URL;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -59,15 +60,23 @@ public class LinkController {
             @RequestHeader(value = "Referer", required = false) String referer,
             HttpServletRequest request) {
 
-        Link link = linkService.getByCode(code);
+        String url = linkService.getOriginalUrl(code);
 
         String ip = request.getRemoteAddr();
-        linkService.trackClick(link, ip, userAgent, referer);
+        linkService.trackClick(code, ip, userAgent, referer);
 
         return ResponseEntity
                 .status(HttpStatus.FOUND)
-                .location(URI.create(link.getOriginalUrl()))
+                .location(URI.create(url))
                 .build();
+    }
+
+    @DeleteMapping("/api/links/{code}")
+    public ResponseEntity<Void> deleteLink(@PathVariable String code,
+            Authentication authentication) {
+        User user = (User) authentication.getPrincipal();
+        linkService.deleteLink(code, user);
+        return ResponseEntity.noContent().build();
     }
 
     record ShortenRequest(

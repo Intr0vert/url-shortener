@@ -3,7 +3,10 @@ package com.shortener.url_shortener.service;
 import java.security.SecureRandom;
 import java.util.List;
 
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 import com.shortener.url_shortener.dto.LinkStatsResponse;
 import com.shortener.url_shortener.dto.LinkStatsResponse.DailyCount;
@@ -22,9 +25,10 @@ public class LinkService {
     private final ClickRepository clickRepository;
     private final UserAgentParser userAgentParser;
     private final GeoService geoService;
+    private final RedisCacheService redisCacheService;
 
     public LinkStatsResponse getStats(String code) {
-        Link link = getByCode(code);
+        Link link = getLinkByCode(code);
         Long linkId = link.getId();
 
         long totalClicks = clickRepository.countByLinkId(linkId);
@@ -57,11 +61,13 @@ public class LinkService {
 
     public LinkService(LinkRepository linkRepository, ClickRepository clickRepository,
             UserAgentParser userAgentParser,
-            GeoService geoService) {
+            GeoService geoService,
+            RedisCacheService redisCacheService) {
         this.clickRepository = clickRepository;
         this.geoService = geoService;
         this.linkRepository = linkRepository;
         this.userAgentParser = userAgentParser;
+        this.redisCacheService = redisCacheService;
     }
 
     public Link createLink(String originalUrl, User user) {
@@ -70,12 +76,48 @@ public class LinkService {
         return linkRepository.save(link);
     }
 
-    public Link getByCode(String code) {
+    public Link getLinkByCode(String code) {
         return linkRepository.findByShortCode(code)
                 .orElseThrow(() -> new LinkNotFoundException(code));
     }
 
-    public void trackClick(Link link, String ip, String userAgent, String referer) {
+    public String getOriginalUrl(String code) {
+        String cached = redisCacheService.getOriginalUrl(code);
+        if (cached != null) {
+
+            return cached;
+        }
+
+        Link link = linkRepository.findByShortCode(code)
+                .orElseThrow(() -> new LinkNotFoundException(code));
+
+        redisCacheService.cacheOriginalUrl(code, link.getOriginalUrl());
+
+        return link.getOriginalUrl();
+    }
+
+    @Transactional
+    public void deleteLink(String code, User user) {
+        Link link = linkRepository.findByShortCode(code)
+                .orElseThrow(() -> new LinkNotFoundException(code));
+
+        if (link.getUser() == null) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Anonymous links cannot be deleted");
+        }
+
+        if (!link.getUser().getId().equals(user.getId())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Not your link");
+        }
+
+        clickRepository.deleteByLinkId(link.getId());
+        linkRepository.delete(link);
+        redisCacheService.evict(code);
+    }
+
+    @Transactional
+    public void trackClick(String shortCode, String ip, String userAgent, String referer) {
+        Link link = linkRepository.findByShortCode(shortCode)
+                .orElseThrow(() -> new LinkNotFoundException(shortCode));
         String deviceType = userAgentParser.parseDeviceType(userAgent);
         String browser = userAgentParser.parseBrowser(userAgent);
 

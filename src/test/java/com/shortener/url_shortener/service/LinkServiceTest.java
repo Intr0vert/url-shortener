@@ -58,21 +58,21 @@ class LinkServiceTest {
     }
 
     @Test
-    void getByCode_existingCode_shouldReturnLink() {
+    void getLinkByCode_existingCode_shouldReturnLink() {
         Link link = new Link("abc123", "https://github.com");
         when(linkRepository.findByShortCode("abc123")).thenReturn(Optional.of(link));
 
-        Link result = linkService.getByCode("abc123");
+        Link result = linkService.getLinkByCode("abc123");
 
         assertEquals("https://github.com", result.getOriginalUrl());
     }
 
     @Test
-    void getByCode_nonExistingCode_shouldThrowException() {
+    void getLinkByCode_nonExistingCode_shouldThrowException() {
         when(linkRepository.findByShortCode("nope")).thenReturn(Optional.empty());
 
         assertThrows(LinkNotFoundException.class, () -> {
-            linkService.getByCode("nope");
+            linkService.getLinkByCode("nope");
         });
     }
 

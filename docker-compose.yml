@@ -10,11 +10,24 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
 
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
   app:
     build: .
     ports:
       - "8080:8080"
     environment:
+      SPRING_DATA_REDIS_HOST: redis
       SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/shortener
       SPRING_DATASOURCE_USERNAME: shortener
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
@@ -22,6 +35,8 @@ services:
       JWT_EXPIRATION_MS: ${JWT_EXPIRATION_MS}
     depends_on:
       - db
+      - redis
 
 volumes:
   pgdata:
+  redis_data:
